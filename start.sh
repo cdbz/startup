@@ -1,3 +1,5 @@
+#!/bin/bash
+
 backup_configs() {
     if [ -f config.json ]; then
         cp config.json config.json.backup
@@ -23,39 +25,26 @@ restore_configs() {
     fi
 }
 
-cleanup_git() {
-    if [ -d .git ]; then
-        rm -rf .git
-    fi
-}
+backup_configs
 
-if [[ ! -d .git ]]; then
-    backup_configs
-    
-    GIT_ADDRESS="https://${USERNAME}:${ACCESS_TOKEN}@$(echo -e ${GIT_ADDRESS} | cut -d/ -f3-)"
-    if [ -z ${BRANCH} ]; then
-        git clone ${GIT_ADDRESS} .
-    else
-        git clone --single-branch --branch ${BRANCH} ${GIT_ADDRESS} .
-    fi
-    
-    restore_configs
-    cleanup_git
-elif [[ ${AUTO_UPDATE} == "1" ]]; then
-    backup_configs
-    
-    mkdir -p /tmp/update
-    GIT_ADDRESS="https://${USERNAME}:${ACCESS_TOKEN}@$(echo -e ${GIT_ADDRESS} | cut -d/ -f3-)"
-    if [ -z ${BRANCH} ]; then
-        git clone ${GIT_ADDRESS} /tmp/update
-    else
-        git clone --single-branch --branch ${BRANCH} ${GIT_ADDRESS} /tmp/update
-    fi
-    
-    rsync -av --exclude 'config.json' --exclude 'config/' --exclude '.env' /tmp/update/ .
-    
-    rm -rf /tmp/update
+UPDATE_DIR="/tmp/update_$(date +%s)"
+mkdir -p "$UPDATE_DIR"
+
+GIT_ADDRESS="https://${USERNAME}:${ACCESS_TOKEN}@$(echo -e ${GIT_ADDRESS} | cut -d/ -f3-)"
+if [ -z ${BRANCH} ]; then
+    git clone ${GIT_ADDRESS} "$UPDATE_DIR"
+else
+    git clone --single-branch --branch ${BRANCH} ${GIT_ADDRESS} "$UPDATE_DIR"
 fi
+
+rsync -a --delete \
+    --exclude 'config.json' \
+    --exclude 'config/' \
+    --exclude '.env' \
+    "$UPDATE_DIR/" .
+
+rm -rf "$UPDATE_DIR"
+restore_configs
 
 if [[ ! -z ${NODE_PACKAGES} ]]; then
     /usr/local/bin/npm install ${NODE_PACKAGES}
