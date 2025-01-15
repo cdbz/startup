@@ -1,51 +1,58 @@
 #!/bin/bash
 
+# Funktionen für Backup und Restore
 backup_configs() {
+    mkdir -p /tmp/backups
     if [ -f config.json ]; then
-        cp config.json config.json.backup
+        cp config.json /tmp/backups/
     fi
     if [ -f .env ]; then
-        cp .env .env.backup
+        cp .env /tmp/backups/
     fi
     if [ -d config ]; then
-        cp -r config config.backup
+        cp -r config /tmp/backups/
     fi
 }
 
 restore_configs() {
-    if [ -f config.json.backup ]; then
-        mv config.json.backup config.json
-    fi
-    if [ -f .env.backup ]; then
-        mv .env.backup .env
-    fi
-    if [ -d config.backup ]; then
-        rm -rf config
-        mv config.backup config
+    if [ -d /tmp/backups ]; then
+        cp -r /tmp/backups/* .
+        rm -rf /tmp/backups
     fi
 }
 
-backup_configs
-
-UPDATE_DIR="/tmp/update_$(date +%s)"
-mkdir -p "$UPDATE_DIR"
-
-GIT_ADDRESS="https://${USERNAME}:${ACCESS_TOKEN}@$(echo -e ${GIT_ADDRESS} | cut -d/ -f3-)"
-if [ -z ${BRANCH} ]; then
-    git clone ${GIT_ADDRESS} "$UPDATE_DIR"
+# Hauptlogik
+if [ -f package.json ]; then
+    # Update-Fall
+    backup_configs
+    
+    # Alle Dateien außer Backups löschen
+    find . -mindepth 1 -maxdepth 1 ! -name 'tmp' -exec rm -rf {} +
+    
+    # Neuen Code klonen
+    GIT_ADDRESS="https://${USERNAME}:${ACCESS_TOKEN}@$(echo -e ${GIT_ADDRESS} | cut -d/ -f3-)"
+    if [ -z ${BRANCH} ]; then
+        git clone ${GIT_ADDRESS} .
+    else
+        git clone --single-branch --branch ${BRANCH} ${GIT_ADDRESS} .
+    fi
+    
+    # Configs wiederherstellen
+    restore_configs
 else
-    git clone --single-branch --branch ${BRANCH} ${GIT_ADDRESS} "$UPDATE_DIR"
+    # Erstinstallation
+    GIT_ADDRESS="https://${USERNAME}:${ACCESS_TOKEN}@$(echo -e ${GIT_ADDRESS} | cut -d/ -f3-)"
+    if [ -z ${BRANCH} ]; then
+        git clone ${GIT_ADDRESS} .
+    else
+        git clone --single-branch --branch ${BRANCH} ${GIT_ADDRESS} .
+    fi
 fi
 
-rsync -a --delete \
-    --exclude 'config.json' \
-    --exclude 'config/' \
-    --exclude '.env' \
-    "$UPDATE_DIR/" .
+# Git-Verzeichnis entfernen
+rm -rf .git
 
-rm -rf "$UPDATE_DIR"
-restore_configs
-
+# NPM Pakete Installation
 if [[ ! -z ${NODE_PACKAGES} ]]; then
     /usr/local/bin/npm install ${NODE_PACKAGES}
 fi
@@ -58,6 +65,7 @@ if [ -f /home/container/package.json ]; then
     /usr/local/bin/npm install
 fi
 
+# Starten der Anwendung
 if [[ "${MAIN_FILE}" == "*.js" ]]; then
     /usr/local/bin/node "/home/container/${MAIN_FILE}" ${NODE_ARGS}
 else
