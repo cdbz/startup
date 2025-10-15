@@ -66,8 +66,4 @@ if [ -f /home/container/package.json ]; then
 fi
 
 # Starten der Anwendung
-if [[ "${MAIN_FILE}" == "*.js" ]]; then
-    /usr/local/bin/node "/home/container/${MAIN_FILE}" ${NODE_ARGS}
-else
-    /usr/local/bin/ts-node --esm "/home/container/${MAIN_FILE}" ${NODE_ARGS}
-fi
+/usr/local/bin/npm run start
